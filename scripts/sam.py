@@ -18,7 +18,7 @@ from modules.paths import models_path
 from sam_hq.predictor import SamPredictorHQ
 from sam_hq.build_sam_hq import sam_model_registry
 from scripts.dino import dino_model_list, dino_predict_internal, show_boxes, clear_dino_cache, dino_install_issue_text
-from scripts.auto import clear_sem_sam_cache, register_auto_sam, semantic_segmentation, sem_sam_garbage_collect, image_layer_internal, categorical_mask_image
+from scripts.auto import clear_sem_sam_cache, register_auto_sam, semantic_segmentation, sem_sam_garbage_collect, image_layer_internal, categorical_mask_image, masks_generate
 from scripts.process_params import SAMProcessUnit, max_cn_num
 
 
@@ -303,7 +303,34 @@ def dino_batch_process(
     garbage_collect(sam)
     return process_info + "Done" + ("" if install_success else f". However, GroundingDINO installment has failed. Your process automatically fall back to local groundingdino. See your terminal for more detail and {dino_install_issue_text}")
 
-
+def mask_seg(
+    sam_model_name,
+    input_image,
+    auto_sam_points_per_side, auto_sam_points_per_batch, auto_sam_pred_iou_thresh, 
+    auto_sam_stability_score_thresh, auto_sam_stability_score_offset, auto_sam_box_nms_thresh, 
+    auto_sam_crop_n_layers, auto_sam_crop_nms_thresh, auto_sam_crop_overlap_ratio, 
+    auto_sam_crop_n_points_downscale_factor, auto_sam_min_mask_region_area):
+    print("Auto SAM generating masks")
+    sam = load_sam_model(sam_model_name)
+    predictor = SamPredictorHQ(sam, 'hq' in sam_model_name)
+    register_auto_sam(predictor, 
+                      auto_sam_points_per_side, 
+                      auto_sam_points_per_batch, 
+                      auto_sam_pred_iou_thresh, 
+                      auto_sam_stability_score_thresh, 
+                      auto_sam_stability_score_offset, 
+                      auto_sam_box_nms_thresh, 
+                      auto_sam_crop_n_layers, 
+                      auto_sam_crop_nms_thresh, 
+                      auto_sam_crop_overlap_ratio, 
+                      auto_sam_crop_n_points_downscale_factor, 
+                      auto_sam_min_mask_region_area, 
+                      'binary_mask')
+    outputs = masks_generate(input_image)
+    sem_sam_garbage_collect()
+    garbage_collect(sam)
+    return outputs
+    
 def cnet_seg(
     sam_model_name, cnet_seg_input_image, cnet_seg_processor, cnet_seg_processor_res, 
     cnet_seg_pixel_perfect, cnet_seg_resize_mode, target_W, target_H,

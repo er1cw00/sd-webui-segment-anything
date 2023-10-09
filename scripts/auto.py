@@ -97,7 +97,19 @@ def strengthen_sem_seg(class_ids, img):
     print("Auto SAM strengthen process end")
     return semantc_mask
 
+def masks_generate(img):
+    print("Auto SAM generating masks")
+    img_np = np.array(img.convert("RGB"))
+    annotations = global_sam.generate(img_np)
+    print(f"Auto SAM generated {len(annotations)} masks")
+    annotations = sorted(annotations, key=lambda x: x['area'], reverse=True)
+    # import pycocotools.mask as maskUtils
+    # for idx, ann in enumerate(annotations):
+    #     ann['segmentation'] = maskUtils.decode(ann['segmentation'])
 
+    return annotations
+        
+    
 def random_segmentation(img):
     print("Auto SAM generating random segmentation for Edit-Anything")
     img_np = np.array(img.convert("RGB"))

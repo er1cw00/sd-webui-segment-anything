@@ -7,7 +7,7 @@ from PIL import Image
 import numpy as np
 
 from modules.api.api import encode_pil_to_base64, decode_base64_to_image
-from scripts.sam import sam_predict, dino_predict, update_mask, cnet_seg, categorical_mask
+from scripts.sam import sam_predict, dino_predict, update_mask, cnet_seg, categorical_mask, mask_seg
 from scripts.sam import sam_model_list
 
 
@@ -58,7 +58,7 @@ def sam_api(_: gr.Blocks, app: FastAPI):
         dino_box_threshold: Optional[float] = 0.3
         dino_preview_checkbox: bool = False
         dino_preview_boxes_selection: Optional[List[int]] = None
-
+        
     @app.post("/sam/sam-predict")
     async def api_sam_predict(payload: SamPredictRequest = Body(...)) -> Any:
         print(f"SAM API /sam/sam-predict received request")
@@ -146,7 +146,43 @@ def sam_api(_: gr.Blocks, app: FastAPI):
         resize_mode: Optional[int] = 1 # 0: just resize, 1: crop and resize, 2: resize and fill
         target_W: Optional[int] = None
         target_H: Optional[int] = None
-
+    
+    class MaskSegRequest(BaseModel):
+        sam_model_name: str = "sam_vit_h_4b8939.pth"
+        input_image: str
+        top_n_area: int
+        
+    @app.post("/sam/mask-seg")
+    async def api_mask_seg(payload: MaskSegRequest = Body(...),
+                            autosam_conf: AutoSAMConfig = Body(...)) -> Any:
+        payload.input_image = decode_to_pil(payload.input_image)
+        segs = mask_seg(payload.sam_model_name,
+                    payload.input_image,
+                    autosam_conf.points_per_side,
+                    autosam_conf.points_per_batch,
+                    autosam_conf.pred_iou_thresh,
+                    autosam_conf.stability_score_thresh,
+                    autosam_conf.stability_score_offset,
+                    autosam_conf.box_nms_thresh,
+                    autosam_conf.crop_n_layers,
+                    autosam_conf.crop_nms_thresh,
+                    autosam_conf.crop_overlap_ratio,
+                    autosam_conf.crop_n_points_downscale_factor,
+                    autosam_conf.min_mask_region_area)
+        masks = []
+        for i, seg in enumerate(segs):
+            if i >= payload.top_n_area:
+                break
+            img = seg["segmentation"]
+            j = {
+                'area': seg["area"],
+                'bbox': [x for x in seg["bbox"]],
+                'iou': seg["predicted_iou"],
+                'segment': encode_to_base64(img),
+            }
+            masks.append(j)
+        return masks
+            
     @app.post("/sam/controlnet-seg")
     async def api_controlnet_seg(payload: ControlNetSegRequest = Body(...),
                                  autosam_conf: AutoSAMConfig = Body(...)) -> Any:
